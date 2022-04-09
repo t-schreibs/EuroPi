@@ -8,8 +8,6 @@ labels: triggers, drums, randomness, voice allocation
 
 Stripped-down EuroPi note hocketer / voice allocator loosely inspired by the Intellijel Shifty module, but with its own take on randomization.
 
-
-
 In music, a 'hocket' (often spelled a variety of ways) happens when two or more voices share a bit of melodic content, alternately playing portions of it in such a way that the melody is continuous even when all but a single player are at rest. Usually, each voice will perform only a handful of notes at a time (sometimes as few as a single note), and so the alternation occurs rapidly.
 
 This program allows you to input a sequence - in the form of gate + CV - into the EuroPi and output that sequence to three voices, allocating notes in such a way that the entire sequence is performed continuously, but shared across the different voices.
@@ -51,7 +49,7 @@ Connect a gate + CV sequence of some kind to the EuroPi inputs, with the gate co
     - Pitch/CV: CV6
 
 Knob 1 controls the amount of steps each voice will perform before the sequence is moved to the next voice. It ranges from 1 to 16 steps. Start by turning it fully counter-clockwise, so that only one step is performed at a time.
-Knob 2 controls the directionality of the motion between the voices, or the likelihood that Hocketer will pick the voice in that direction as the next voice. This is easier to visualize than explain, and is easier to see when knob 1 is turned fully counter-clockwise. As you turn knob 2 to the left from center, watch as the progression of the voices becomes less random and more clearly leftward. The same is true as you turn it right of center, while at center progression of the voices is fully random.
+Knob 2 controls the directionality of the motion between the voices, or the likelihood that Hocketer will pick the voice in either direction as the next voice. This is easier to visualize than explain, and is easier to see when knob 1 is turned fully counter-clockwise. As you turn knob 2 to the left from center, watch as the progression of the voices becomes less random and more clearly leftward. The same is true as you turn it right of center, while at center progression of the voices is fully random.
 
 ## Further usage
 

@@ -53,7 +53,7 @@ class Hocketer(EuroPiScript):
                 self.current_voice = self.get_next_voice()
                 self.pulses_since_last_voice = 0
                 # If the "pulses per voice" value is randomized, a new value
-                # is obtained before the next voice begins to play, with K1
+                # is obtained before the next voice begins to play, with k1
                 # acting as an attenuator on the randomization
                 if self.random_pulses_per_voice:
                     self.pulses_per_voice = randint(1, k1.read_position(16))
@@ -82,10 +82,11 @@ class Hocketer(EuroPiScript):
         return items[1:] + items[:1]
     
     def get_next_voice(self):
-        # Directionality determines the pull toward moving to either the
-        # previous or next voice - at 100, it will always progress to the
-        # voice to the right; at 0, it will always progress to the voice to
-        # the left; at 50, it might move either direction
+        # Directionality determines the likelihood that the next voice will
+        # be either the voice to the left or the voice to the right of the
+        # current voice - at 100, it will always progress to the voice to 
+        # the right; at 0, it will always progress to the voice to the left; 
+        # at 50, it might move either direction
         if randint(0, 100) <= self.directionality_of_voice_order:
             if self.current_voice >= len(self.voices) - 1:
                 return 0
