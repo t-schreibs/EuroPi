@@ -1,4 +1,3 @@
-from black import out
 from europi import *
 import machine
 import time
@@ -15,6 +14,7 @@ class Envelope:
         self.outputs = outputs
         self.last_triggered = None
         self.gate_high = False
+        self.highest_value_this_cycle = 0
 
     def gate_on(self):
         self.last_triggered = time.ticks_ms()
@@ -25,29 +25,36 @@ class Envelope:
         self.gate_high = False
 
     def update_outputs(self, attack, sustain, release):
-        time_since_trigger = time.ticks_ms() - self.last_triggered
+        time_since_trigger = time.ticks_ms() - (
+            self.last_triggered if self.last_triggered != None else 0
+        )
         if self.gate_high:
-            voltage = GATE_VOLTAGE * sustain * min(time_since_trigger / attack, 1)
+            self.highest_value_this_cycle = min(time_since_trigger / attack, 1)
+            voltage = GATE_VOLTAGE * sustain * self.highest_value_this_cycle
         else:
             voltage = (
-                GATE_VOLTAGE * sustain * max(release - time_since_trigger / release, 0)
+                GATE_VOLTAGE
+                * sustain
+                * self.highest_value_this_cycle
+                * max((release - time_since_trigger) / release, 0)
             )
         for output in self.outputs:
             output.voltage(voltage)
 
 
-class MoltQuantizer(EuroPiScript):
+class DualAREnvelope(EuroPiScript):
     def __init__(self):
         # Settings for improved performance.
         machine.freq(250_000_000)
         k1.set_samples(32)
         k2.set_samples(32)
         self.envelopes = [
-            Envelope([cv1, cv4, cv2, cv5]),
-            Envelope([cv3, cv6, cv2, cv5]),
+            Envelope([cv1, cv4]),
+            Envelope([cv3, cv6]),
+            Envelope([cv2, cv5]),
         ]
         self.attack = None
-        self.sustain = None
+        self.sustain = 1
         self.release = None
         self.ui_update_requested = False
         self.load_state()
@@ -69,11 +76,11 @@ class MoltQuantizer(EuroPiScript):
     def update_ui(self):
         oled.centre_text(
             "A: "
-            + self.attack
+            + str(self.attack)
             + "\nR: "
-            + self.release
+            + str(self.release)
             + "\nAttenuation: "
-            + self.sustain
+            + str(self.sustain)
         )
         self.ui_update_requested = False
 
@@ -87,8 +94,8 @@ class MoltQuantizer(EuroPiScript):
             self.sustain = settings["s"]
 
     def update_settings(self):
-        new_attack = k1.percent() * MAX_ATTACK
-        new_release = k2.percent() * MAX_RELEASE
+        new_attack = k1.percent() * MAX_ATTACK + 1
+        new_release = k2.percent() * MAX_RELEASE + 1
         if not (new_attack == self.attack and new_release == self.release):
             self.attack = new_attack
             self.release = new_release
@@ -96,7 +103,11 @@ class MoltQuantizer(EuroPiScript):
 
     def play(self):
         new_first_gate_high = din.value() > 0
-        new_second_gate_high = ain.read_voltage() > INPUT_GATE_VOLTAGE
+        analog_input = ain.read_voltage()
+        new_second_gate_high = analog_input > INPUT_GATE_VOLTAGE or (
+            self.envelopes[1].gate_high and analog_input > INPUT_GATE_VOLTAGE - 0.1
+        )
+        new_third_gate_high = new_first_gate_high or new_second_gate_high
         if new_first_gate_high != self.envelopes[0].gate_high:
             if new_first_gate_high:
                 self.envelopes[0].gate_on()
@@ -107,6 +118,11 @@ class MoltQuantizer(EuroPiScript):
                 self.envelopes[1].gate_on()
             else:
                 self.envelopes[1].gate_off()
+        if new_third_gate_high != self.envelopes[2].gate_high:
+            if new_third_gate_high:
+                self.envelopes[2].gate_on()
+            else:
+                self.envelopes[2].gate_off()
         for envelope in self.envelopes:
             envelope.update_outputs(self.attack, self.sustain, self.release)
 
@@ -120,4 +136,4 @@ class MoltQuantizer(EuroPiScript):
 
 # Main script execution
 if __name__ == "__main__":
-    MoltQuantizer().main()
+    DualAREnvelope().main()
