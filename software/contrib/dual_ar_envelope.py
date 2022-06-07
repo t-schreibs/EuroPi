@@ -61,12 +61,12 @@ class DualAREnvelope(EuroPiScript):
 
         @b1.handler
         def reduce_sustain():
-            self.sustain = max(self.release - 0.1, 0)
+            self.sustain = max(self.sustain - 0.1, 0)
             self.ui_update_requested = True
 
         @b2.handler
         def increase_sustain():
-            self.sustain = min(self.release + 0.1, 1)
+            self.sustain = min(self.sustain + 0.1, 1)
             self.ui_update_requested = True
 
     @classmethod
