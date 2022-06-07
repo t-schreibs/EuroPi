@@ -76,14 +76,25 @@ class DualAREnvelope(EuroPiScript):
         return "Dual AR Env."
 
     def update_ui(self):
-        oled.centre_text(
-            "A: "
-            + str(self.attack)
-            + "\nR: "
-            + str(self.release)
-            + "\nAttenuation: "
-            + str(self.sustain)
+        oled.fill(0)
+        sustain_width = int(OLED_WIDTH / 4)
+        sustain_height = int(OLED_HEIGHT * self.sustain)
+        attack_width = int(
+            (OLED_WIDTH - sustain_width) * self.attack / (MAX_ATTACK + MAX_RELEASE)
         )
+        release_width = int(
+            (OLED_WIDTH - sustain_width) * self.release / (MAX_ATTACK + MAX_RELEASE)
+        )
+        oled.line(0, OLED_HEIGHT, attack_width, OLED_HEIGHT - sustain_height, 1)
+        oled.hline(attack_width, OLED_HEIGHT - sustain_height, sustain_width, 1)
+        oled.line(
+            attack_width + sustain_width,
+            OLED_HEIGHT - sustain_height,
+            attack_width + sustain_width + release_width,
+            OLED_HEIGHT,
+            1,
+        )
+        oled.show()
         self.ui_update_requested = False
 
     def save_state(self):
