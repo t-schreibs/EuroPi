@@ -4,54 +4,83 @@ import time
 from europi_script import EuroPiScript
 
 INPUT_GATE_VOLTAGE = 3
-GATE_VOLTAGE = 5
+OUTPUT_VOLTAGE = 10
 MAX_ATTACK = 2000
 MAX_RELEASE = 5000
 
 
 class Envelope:
-    def __init__(self, outputs):
-        self.outputs = outputs
-        self.last_triggered = None
-        self.gate_high = False
+    def __init__(self, cv_output, eoc_output):
+        self.cv_output = cv_output
+        self.eoc_output = eoc_output
+        self.last_rising = None
+        self.last_falling = None
+        self.last_end_of_cycle = None
+        self.input_gate_high = False
+        self.eoc_gate_high = False
+        # If the attack stage of the envelope is cut short by the gate, this variable
+        # keeps track of the highest value reached so that the release stage can start
+        # from the correct value.
         self.highest_value_this_cycle = 0
 
     def gate_on(self):
-        self.last_triggered = time.ticks_ms()
-        self.gate_high = True
+        self.last_rising = time.ticks_ms()
+        self.input_gate_high = True
 
     def gate_off(self):
-        self.last_triggered = time.ticks_ms()
-        self.gate_high = False
+        self.last_falling = time.ticks_ms()
+        self.input_gate_high = False
 
+    # Todo: refactor this method
     def update_outputs(self, attack, sustain, release):
-        time_since_trigger = time.ticks_ms() - (
-            self.last_triggered if self.last_triggered != None else 0
+        current_time = time.ticks_ms()
+        time_since_rising = current_time - (
+            self.last_rising if self.last_rising != None else 0
         )
-        if self.gate_high:
-            self.highest_value_this_cycle = min(time_since_trigger / attack, 1)
-            voltage = GATE_VOLTAGE * sustain * self.highest_value_this_cycle
+        time_since_falling = current_time - (
+            self.last_falling if self.last_falling != None else 0
+        )
+        time_since_end_of_cycle = current_time - (
+            self.last_end_of_cycle if self.last_end_of_cycle != None else current_time
+        )
+        if self.input_gate_high:
+            self.highest_value_this_cycle = min(time_since_rising / attack, 1)
+            self.cv_output.voltage(
+                OUTPUT_VOLTAGE * sustain * self.highest_value_this_cycle
+            )
         else:
-            voltage = (
-                GATE_VOLTAGE
+            self.cv_output.voltage(
+                OUTPUT_VOLTAGE
                 * sustain
                 * self.highest_value_this_cycle
-                * max((release - time_since_trigger) / release, 0)
+                * max((release - time_since_falling) / release, 0)
             )
-        for output in self.outputs:
-            output.voltage(voltage)
+            if (
+                self.eoc_gate_high == False
+                and time_since_falling >= release
+                and time_since_falling < release + attack
+            ):
+                self.last_end_of_cycle = time.ticks_ms()
+                self.eoc_output.on()
+                self.eoc_gate_high = True
+        if time_since_end_of_cycle >= attack and self.eoc_gate_high:
+            self.eoc_output.off()
+            self.eoc_gate_high = False
 
 
 class DualAREnvelope(EuroPiScript):
     def __init__(self):
-        # Settings for improved performance.
+        # Settings for improved performance
         machine.freq(250_000_000)
         k1.set_samples(32)
         k2.set_samples(32)
         self.envelopes = [
-            Envelope([cv1, cv4]),
-            Envelope([cv3, cv6]),
-            Envelope([cv2, cv5]),
+            # Digital input gate
+            Envelope(cv1, cv4),
+            # Analog input gate
+            Envelope(cv3, cv6),
+            # Both
+            Envelope(cv2, cv5),
         ]
         self.attack = None
         self.sustain = 1
@@ -61,13 +90,13 @@ class DualAREnvelope(EuroPiScript):
 
         @b1.handler
         def reduce_sustain():
-            self.sustain = max(self.sustain - 0.1, 0)
+            self.sustain = max(self.sustain - 0.05, 0)
             self.ui_update_requested = True
             self.save_state()
 
         @b2.handler
         def increase_sustain():
-            self.sustain = min(self.sustain + 0.1, 1)
+            self.sustain = min(self.sustain + 0.05, 1)
             self.ui_update_requested = True
             self.save_state()
 
@@ -118,20 +147,21 @@ class DualAREnvelope(EuroPiScript):
         new_first_gate_high = din.value() > 0
         analog_input = ain.read_voltage()
         new_second_gate_high = analog_input > INPUT_GATE_VOLTAGE or (
-            self.envelopes[1].gate_high and analog_input > INPUT_GATE_VOLTAGE - 0.1
+            self.envelopes[1].input_gate_high
+            and analog_input > INPUT_GATE_VOLTAGE - 0.1
         )
         new_third_gate_high = new_first_gate_high or new_second_gate_high
-        if new_first_gate_high != self.envelopes[0].gate_high:
+        if new_first_gate_high != self.envelopes[0].input_gate_high:
             if new_first_gate_high:
                 self.envelopes[0].gate_on()
             else:
                 self.envelopes[0].gate_off()
-        if new_second_gate_high != self.envelopes[1].gate_high:
+        if new_second_gate_high != self.envelopes[1].input_gate_high:
             if new_second_gate_high:
                 self.envelopes[1].gate_on()
             else:
                 self.envelopes[1].gate_off()
-        if new_third_gate_high != self.envelopes[2].gate_high:
+        if new_third_gate_high != self.envelopes[2].input_gate_high:
             if new_third_gate_high:
                 self.envelopes[2].gate_on()
             else:
