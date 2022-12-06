@@ -5,6 +5,7 @@ from europi_script import EuroPiScript
 
 INPUT_GATE_VOLTAGE = 3
 OUTPUT_VOLTAGE = 10
+MIN_GATE_LENGTH = 8
 MAX_ATTACK = 2000
 MAX_RELEASE = 5000
 
@@ -22,6 +23,9 @@ class Envelope:
         # keeps track of the highest value reached so that the release stage can start
         # from the correct value.
         self.highest_value_this_cycle = 0
+
+    def get_gate_length(self, attack):
+        return max(attack, MIN_GATE_LENGTH)
 
     def gate_on(self):
         self.last_rising = time.ticks_ms()
@@ -58,12 +62,15 @@ class Envelope:
             if (
                 self.eoc_gate_high == False
                 and time_since_falling >= release
-                and time_since_falling < release + attack
+                and time_since_falling < release + self.get_gate_length(attack)
             ):
                 self.last_end_of_cycle = time.ticks_ms()
                 self.eoc_output.on()
                 self.eoc_gate_high = True
-        if time_since_end_of_cycle >= attack and self.eoc_gate_high:
+        if (
+            time_since_end_of_cycle >= self.get_gate_length(attack)
+            and self.eoc_gate_high
+        ):
             self.eoc_output.off()
             self.eoc_gate_high = False
 
