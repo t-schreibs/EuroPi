@@ -38,7 +38,7 @@ class Voice:
     def __init__(self, min_pitch, max_pitch, cv_output: Output):
         self.min_pitch = min_pitch
         self.max_pitch = max_pitch
-        self.current_pitch = None
+        self.current_pitch = 0
         self.cv_output = cv_output
 
     def set(self, value):
@@ -47,7 +47,7 @@ class Voice:
 
     def get_current_note_name(self):
         note, octave = math.modf(self.current_pitch)
-        return NOTES[round(note * 12)] + str(octave)
+        return NOTES[round(note * 12)] + str(int(octave))
 
 
 class VoiceLeader(EuroPiScript):
@@ -89,10 +89,10 @@ class VoiceLeader(EuroPiScript):
             ),
         ]
         self.scales = [
-            Scale("Chrom.", (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)),
-            Scale("Maj.", (0, 2, 4, 5, 7, 9, 11)),
-            Scale("Harm. min.", (0, 2, 3, 5, 7, 8, 11)),
-            Scale("Mel. min.", (0, 2, 3, 5, 7, 9, 11)),
+            Scale("CHROM", (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)),
+            Scale("MAJOR", (0, 2, 4, 5, 7, 9, 11)),
+            Scale("HARM ", (0, 2, 3, 5, 7, 8, 11)),
+            Scale("MEL  ", (0, 2, 3, 5, 7, 9, 11)),
         ]
         self.current_key = None
         self.current_scale = 0
@@ -107,15 +107,18 @@ class VoiceLeader(EuroPiScript):
         @b1.handler
         def turn_on_root_inversions_only():
             self.root_inversions_only = True
+            self.ui_update_requested = True
 
         @b1.handler_falling
         def turn_off_root_inversions_only():
             self.root_inversions_only = False
+            self.ui_update_requested = True
 
         @b2.handler
         def toggle_get_root_from_analog_input():
             self.get_root_from_analog_input = not self.get_root_from_analog_input
             self.save_state_requested = True
+            self.ui_update_requested = True
 
     def get_current_scale_notes(self, key, scale):
         return map(lambda n: (key + n) % 12, self.scales[scale].intervals)
@@ -156,35 +159,46 @@ class VoiceLeader(EuroPiScript):
 
     def update_ui(self):
         oled.fill(0)
-        padding = 2
+        padding = 5
         treble_voice_count = len(self.treble_voices)
-        voice_width = OLED_WIDTH / treble_voice_count
-        voice_height = OLED_HEIGHT / 2
+        voice_width = int(OLED_WIDTH / treble_voice_count)
+        voice_height = int(OLED_HEIGHT / 2)
         # Note names for treble voices
         for voice in self.treble_voices:
             i = self.treble_voices.index(voice)
             left_side = i * voice_width
-            oled.rect(left_side, 0, left_side + voice_width, voice_height)
+            oled.rect(left_side, 0, left_side + voice_width, voice_height, 1)
             oled.text(voice.get_current_note_name(), left_side + padding, padding, 1)
         # Note name for bass voice
-        oled.rect(0, voice_height, voice_width, OLED_HEIGHT)
+        oled.rect(0, voice_height, voice_width, OLED_HEIGHT, 1)
         oled.text(
             self.bass_voice.get_current_note_name(), padding, voice_height + padding
         )
         # Settings
         oled.text(
-            "In: " + "A. | "
-            if self.get_root_from_analog_input
-            else "D. | " + self.scales[self.current_scale].name + " | ROOT"
-            if self.root_inversions_only
-            else " |",
+            "{:<2}".format(NOTES[self.current_key])
+            + "|"
+            + self.scales[self.current_scale].name
+            + ("|A" if self.get_root_from_analog_input else "|D"),
             voice_width + padding,
             voice_height + padding,
         )
+        oled.show()
+
+    def update_settings(self):
+        new_key = k1.range(12)
+        if self.current_key != new_key:
+            self.current_key = new_key
+            self.ui_update_requested = True
+        new_scale = k2.range(len(self.scales))
+        if self.current_scale != new_scale:
+            self.current_scale = new_scale
+            self.ui_update_requested = True
 
     def main(self):
         while True:
             # actually run code here ((()))
+            self.update_settings()
             if self.ui_update_requested:
                 self.update_ui()
             if self.save_state_requested:
